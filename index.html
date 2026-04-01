@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FLUX / ASG — Operations Command Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0b0e; --surface:#111318; --surface2:#181b22; --border:#232636;
+    --flux:#f59e0b; --flux-dim:#f59e0b22; --asg:#3b82f6; --asg-dim:#3b82f622;
+    --green:#22c55e; --red:#ef4444; --purple:#a855f7; --text:#e2e8f0;
+    --muted:#64748b; --subtle:#1e2330;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+  /* LOADER */
+  #loader{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;}
+  .loader-title{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:var(--flux);}
+  .loader-sub{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);letter-spacing:2px;}
+  .loader-bar{width:320px;height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .loader-fill{height:100%;background:linear-gradient(90deg,var(--flux),var(--asg));border-radius:2px;animation:loadbar 2s ease forwards;}
+  @keyframes loadbar{from{width:0}to{width:100%}}
+  .loader-status{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-height:18px;}
+
+  /* ERROR BANNER */
+  #errorBanner{display:none;background:#ef444422;border:1px solid #ef444444;color:#ef4444;font-family:'DM Mono',monospace;font-size:11px;padding:10px 32px;text-align:center;}
+
+  /* HEADER */
+  header{display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
+  .brand-group{display:flex;gap:12px;align-items:center;}
+  .brand-pill{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;padding:5px 14px;border-radius:4px;cursor:pointer;transition:all .2s;border:1px solid transparent;}
+  .brand-pill.flux{color:var(--flux);border-color:var(--flux);background:var(--flux-dim);}
+  .brand-pill.asg{color:var(--asg);border-color:var(--asg);background:var(--asg-dim);}
+  .brand-pill.both{color:var(--text);border-color:var(--border);background:var(--subtle);}
+  .brand-pill.active{box-shadow:0 0 14px currentColor;}
+  .header-right{display:flex;gap:14px;align-items:center;}
+  .live-badge{font-family:'DM Mono',monospace;font-size:11px;color:var(--green);display:flex;gap:6px;align-items:center;}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .clock{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);}
+  .refresh-btn{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;padding:5px 12px;border:1px solid var(--border);background:var(--subtle);color:var(--muted);border-radius:4px;cursor:pointer;transition:all .2s;}
+  .refresh-btn:hover{border-color:var(--flux);color:var(--flux);}
+  .last-update{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+
+  /* TABS */
+  .tabs{display:flex;padding:0 32px;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto;}
+  .tab{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:14px 20px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;}
+  .tab:hover{color:var(--text);}
+  .tab.active{color:var(--flux);border-bottom-color:var(--flux);}
+
+  /* FILTERS */
+  .filters-bar{display:flex;flex-wrap:wrap;gap:10px;padding:14px 32px;background:var(--surface2);border-bottom:1px solid var(--border);align-items:center;}
+  .filter-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+  select,.period-btn{background:var(--subtle);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:11px;padding:6px 10px;border-radius:4px;cursor:pointer;outline:none;transition:border-color .2s;}
+  select:focus,select:hover{border-color:var(--flux);}
+  .period-group{display:flex;border:1px solid var(--border);border-radius:4px;overflow:hidden;}
+  .period-btn{border:none;border-radius:0;padding:6px 14px;border-right:1px solid var(--border);}
+  .period-btn:last-child{border-right:none;}
+  .period-btn.active{background:var(--flux);color:#000;font-weight:600;}
+  .period-btn:not(.active):hover{background:var(--surface);}
+
+  /* MAIN */
+  .main{padding:24px 32px;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  /* KPI GRID */
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:24px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 18px;position:relative;overflow:hidden;transition:border-color .2s;}
+  .kpi:hover{border-color:var(--flux);}
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+  .kpi.green::before{background:var(--green);}
+  .kpi.red::before{background:var(--red);}
+  .kpi.amber::before{background:var(--flux);}
+  .kpi.blue::before{background:var(--asg);}
+  .kpi.purple::before{background:var(--purple);}
+  .kpi-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:8px;}
+  .kpi-value{font-family:'Bebas Neue',sans-serif;font-size:34px;line-height:1;margin-bottom:3px;}
+  .kpi.green .kpi-value{color:var(--green);}
+  .kpi.red .kpi-value{color:var(--red);}
+  .kpi.amber .kpi-value{color:var(--flux);}
+  .kpi.blue .kpi-value{color:var(--asg);}
+  .kpi.purple .kpi-value{color:var(--purple);}
+  .kpi-sub{font-size:11px;color:var(--muted);}
+  .kpi-delta{font-family:'DM Mono',monospace;font-size:10px;margin-top:5px;}
+  .kpi-delta.up{color:var(--green);}
+  .kpi-delta.down{color:var(--red);}
+
+  /* SECTION TITLE */
+  .section-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+  .section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+  /* GRIDS */
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;}
+  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:24px;}
+  .grid-2-1{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:24px;}
+
+  /* CARD */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px;}
+  .card-title{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:14px;}
+
+  /* MISSION TABLE */
+  .tbl-wrap{overflow-x:auto;}
+  .mission-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .mission-table th{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;}
+  .mission-table th:hover{color:var(--flux);}
+  .mission-table td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
+  .mission-table tr:hover td{background:var(--subtle);}
+  .sort-icon{color:var(--muted);margin-left:4px;font-size:9px;}
+
+  /* BADGES */
+  .badge{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;padding:3px 8px;border-radius:3px;text-transform:uppercase;}
+  .badge.entregado,.badge.delivered,.badge.completado{background:#22c55e22;color:#22c55e;border:1px solid #22c55e44;}
+  .badge.transito,.badge.transit,.badge.en\ transito,.badge.en\ tránsito{background:#3b82f622;color:#3b82f6;border:1px solid #3b82f644;}
+  .badge.alerta,.badge.alert{background:#ef444422;color:#ef4444;border:1px solid #ef444444;}
+  .badge.pendiente,.badge.pending{background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b44;}
+  .badge.cancelado,.badge.cancelled{background:#64748b22;color:#64748b;border:1px solid #64748b44;}
+
+  /* SERVICE */
+  .svc{font-family:'DM Mono',monospace;font-size:9px;padding:2px 7px;border-radius:2px;text-transform:uppercase;}
+  .svc-obc,.svc-handcarry{background:#a855f722;color:#a855f7;}
+  .svc-nfo{background:#f59e0b22;color:#f59e0b;}
+  .svc-charter{background:#3b82f622;color:#3b82f6;}
+  .svc-hotshot{background:#22c55e22;color:#22c55e;}
+  .svc-dtd,.svc-door{background:#ec489922;color:#ec4899;}
+
+  /* BAR CHART */
+  .bar-chart{display:flex;flex-direction:column;gap:8px;}
+  .bar-row{display:flex;align-items:center;gap:10px;}
+  .bar-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);width:120px;text-align:right;white-space:nowrap;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;}
+  .bar-track{flex:1;background:var(--subtle);border-radius:2px;height:8px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:2px;transition:width 1s ease;}
+  .bar-val{font-family:'DM Mono',monospace;font-size:10px;color:var(--text);width:70px;flex-shrink:0;}
+
+  /* WEEK CALENDAR */
+  .week-grid{display:flex;flex-direction:column;gap:6px;}
+  .week-row{display:flex;gap:4px;align-items:center;}
+  .week-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);width:58px;flex-shrink:0;}
+  .day-cells{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;flex:1;}
+  .day-cell{background:var(--subtle);border-radius:3px;padding:5px 3px;text-align:center;}
+  .day-cell .day-name{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);}
+  .day-cell .day-num{font-family:'Bebas Neue',sans-serif;font-size:20px;line-height:1;color:var(--green);}
+  .day-cell.hot{background:var(--flux-dim);}
+  .day-cell.hot .day-num{color:var(--flux);}
+  .day-cell.empty .day-num{color:var(--border);}
+  .day-cells-total{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--flux);width:36px;text-align:right;flex-shrink:0;}
+  .day-headers{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;padding-left:62px;}
+  .day-h{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-align:center;}
+
+  /* P&L */
+  .profit-stack{display:flex;flex-direction:column;gap:10px;}
+  .profit-row{display:flex;align-items:flex-start;gap:8px;}
+  .profit-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);width:120px;text-align:right;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-top:4px;}
+  .profit-bar-wrap{flex:1;}
+  .profit-track{width:100%;height:18px;background:var(--subtle);border-radius:3px;overflow:hidden;position:relative;}
+  .profit-revenue{position:absolute;left:0;top:0;height:100%;background:var(--asg);opacity:.7;}
+  .profit-cost{position:absolute;left:0;top:0;height:100%;background:var(--red);opacity:.5;}
+  .profit-nums{font-family:'DM Mono',monospace;font-size:10px;display:flex;gap:10px;margin-top:3px;flex-wrap:wrap;}
+  .profit-nums .rev{color:var(--asg);}
+  .profit-nums .cost{color:var(--red);}
+  .profit-nums .margin{color:var(--green);}
+
+  /* SAVINGS/LOSS BOXES */
+  .sl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .sl-box{background:var(--subtle);border-radius:6px;padding:14px;border:1px solid var(--border);}
+  .sl-box.saving{border-color:#22c55e33;}
+  .sl-box.loss{border-color:#ef444433;}
+  .sl-title{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:6px;letter-spacing:1px;text-transform:uppercase;}
+  .sl-amount{font-family:'Bebas Neue',sans-serif;font-size:28px;}
+  .sl-box.saving .sl-amount{color:var(--green);}
+  .sl-box.loss .sl-amount{color:var(--red);}
+
+  /* ALERT FEED */
+  .alert-feed{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;}
+  .alert-item{display:flex;gap:10px;align-items:flex-start;padding:10px;background:var(--subtle);border-radius:5px;border-left:3px solid;}
+  .alert-item.critical{border-color:var(--red);}
+  .alert-item.warning{border-color:var(--flux);}
+  .alert-item.ok{border-color:var(--green);}
+  .alert-text{font-size:11px;color:var(--text);flex:1;}
+  .alert-time{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:3px;}
+
+  /* CLIENT LIST */
+  .client-list{display:flex;flex-direction:column;gap:6px;}
+  .client-row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--subtle);border-radius:4px;}
+  .client-rank{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--muted);width:22px;flex-shrink:0;}
+  .client-name{flex:1;font-size:12px;font-weight:500;}
+  .client-contact{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+  .client-missions{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--flux);}
+  .client-revenue{font-family:'DM Mono',monospace;font-size:11px;color:var(--green);}
+
+  /* SEARCH */
+  .search-input{background:var(--subtle);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:11px;padding:6px 12px;border-radius:4px;outline:none;width:200px;transition:border-color .2s;}
+  .search-input:focus{border-color:var(--flux);}
+
+  /* PAGINATION */
+  .pagination{display:flex;gap:6px;align-items:center;margin-top:12px;justify-content:flex-end;}
+  .page-btn{font-family:'DM Mono',monospace;font-size:10px;padding:4px 10px;border:1px solid var(--border);background:var(--subtle);color:var(--muted);border-radius:3px;cursor:pointer;transition:all .2s;}
+  .page-btn:hover,.page-btn.active{border-color:var(--flux);color:var(--flux);}
+  .page-info{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+
+  /* MONTH TABS */
+  .month-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;}
+  .month-tab{font-family:'DM Mono',monospace;font-size:10px;padding:5px 12px;border:1px solid var(--border);background:var(--subtle);color:var(--muted);border-radius:3px;cursor:pointer;transition:all .2s;}
+  .month-tab:hover{border-color:var(--flux);color:var(--flux);}
+  .month-tab.active{background:var(--flux);border-color:var(--flux);color:#000;}
+
+  /* EMPTY STATE */
+  .empty-state{text-align:center;padding:40px;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;}
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+  @media(max-width:900px){
+    .grid-2,.grid-3,.grid-2-1{grid-template-columns:1fr;}
+    .kpi-grid{grid-template-columns:repeat(2,1fr);}
+    .main{padding:16px;}
+    header{padding:12px 16px;}
+    .filters-bar{padding:10px 16px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="loader-title">OPERATIONS CMD</div>
+  <div class="loader-sub">FLUX LOGISTICS · ASG LOGISTICS</div>
+  <div class="loader-bar"><div class="loader-fill"></div></div>
+  <div class="loader-status" id="loaderStatus">Conectando con Google Sheets...</div>
+</div>
+
+<!-- ERROR BANNER -->
+<div id="errorBanner"></div>
+
+<!-- HEADER -->
+<header>
+  <div style="display:flex;align-items:center;gap:20px;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--flux);">
+      OPERATIONS<span style="color:var(--muted)"> / </span>CMD
+    </div>
+    <div class="brand-group">
+      <div class="brand-pill flux active" onclick="setBrand('FLUX',this)">FLUX</div>
+      <div class="brand-pill asg" onclick="setBrand('ASG',this)">ASG</div>
+      <div class="brand-pill both" onclick="setBrand('ALL',this)">AMBAS</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div> LIVE</div>
+    <div class="last-update" id="lastUpdate">—</div>
+    <button class="refresh-btn" onclick="loadAllData()">↻ ACTUALIZAR</button>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="showTab('overview',this)">Overview</div>
+  <div class="tab" onclick="showTab('missions',this)">Misiones</div>
+  <div class="tab" onclick="showTab('permonth',this)">Per Month</div>
+  <div class="tab" onclick="showTab('financials',this)">Financiero</div>
+  <div class="tab" onclick="showTab('clients',this)">Clientes</div>
+  <div class="tab" onclick="showTab('alerts',this)">Alertas Ops</div>
+</div>
+
+<!-- FILTERS -->
+<div class="filters-bar">
+  <span class="filter-label">Período:</span>
+  <div class="period-group">
+    <button class="period-btn active" onclick="setPeriod('month',this)">MES</button>
+    <button class="period-btn" onclick="setPeriod('q',this)">TRIMESTRE</button>
+    <button class="period-btn" onclick="setPeriod('ytd',this)">YTD</button>
+    <button class="period-btn" onclick="setPeriod('all',this)">TODO</button>
+  </div>
+  <select id="fYear" onchange="applyFilters()">
+    <option value="">— Año —</option>
+    <option value="2025">2025</option>
+    <option value="2024">2024</option>
+  </select>
+  <select id="fMonth" onchange="applyFilters()">
+    <option value="">— Mes —</option>
+    <option value="1">Enero</option><option value="2">Febrero</option>
+    <option value="3">Marzo</option><option value="4">Abril</option>
+    <option value="5">Mayo</option><option value="6">Junio</option>
+    <option value="7">Julio</option><option value="8">Agosto</option>
+    <option value="9">Septiembre</option><option value="10">Octubre</option>
+    <option value="11">Noviembre</option><option value="12">Diciembre</option>
+  </select>
+  <select id="fClient" onchange="applyFilters()"><option value="">— Cliente —</option></select>
+  <select id="fService" onchange="applyFilters()">
+    <option value="">— Tipo Servicio —</option>
+    <option>OBC</option><option>Handcarry</option><option>NFO</option>
+    <option>Charter</option><option>Hotshot</option><option>Door-to-Door</option>
+  </select>
+  <select id="fContact" onchange="applyFilters()"><option value="">— Contacto —</option></select>
+  <select id="fStatus" onchange="applyFilters()">
+    <option value="">— Estatus —</option>
+    <option>Entregado</option><option>En Tránsito</option>
+    <option>Pendiente</option><option>Alerta</option><option>Cancelado</option>
+  </select>
+  <input type="text" class="search-input" id="fSearch" placeholder="🔍 Buscar..." oninput="applyFilters()">
+</div>
+
+<!-- ══ OVERVIEW ══ -->
+<div id="tab-overview" class="tab-panel active">
+<div class="main">
+  <div class="section-title">KPIs EJECUTIVOS</div>
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Misiones por Tipo de Servicio</div>
+      <div class="bar-chart" id="svcBar"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Facturación USD por Tipo de Servicio</div>
+      <div class="bar-chart" id="revBar"></div>
+    </div>
+  </div>
+
+  <div class="section-title">SAVINGS & P&L SUMMARY</div>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">Savings & Profit</div>
+      <div class="sl-grid">
+        <div class="sl-box saving"><div class="sl-title">Savings Cliente</div><div class="sl-amount" id="kSavings">—</div><div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:4px;">vs. mercado spot</div></div>
+        <div class="sl-box saving"><div class="sl-title">Profit Neto</div><div class="sl-amount" id="kProfit">—</div><div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:4px;" id="kMarginPct">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Pérdidas Operativas</div>
+      <div class="sl-grid">
+        <div class="sl-box loss"><div class="sl-title">Pérdida Total</div><div class="sl-amount" id="kLoss">—</div></div>
+        <div class="sl-box loss"><div class="sl-title">Misiones Pérd.</div><div class="sl-amount" id="kLossMissions">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Estatus Global de Misiones</div>
+      <div class="bar-chart" id="statusBar"></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">FLUX vs ASG — Misiones & Revenue</div>
+      <div id="brandCompare"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Evolución Mensual — Misiones Aprobadas</div>
+      <div class="bar-chart" id="monthEvolution"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ MISIONES ══ -->
+<div id="tab-missions" class="tab-panel">
+<div class="main">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="section-title" style="margin-bottom:0;">LOG DE MISIONES</div>
+    <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);" id="missionCount">0 registros</div>
+  </div>
+  <div class="card tbl-wrap">
+    <table class="mission-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('id')">MISIÓN<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('brand')">MARCA<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('client')">CLIENTE<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('contact')">CONTACTO<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('service')">SERVICIO<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('route')">RUTA<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('date')">FECHA<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('revenue')">FACTURADO<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('cost')">COSTO<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('margin')">MARGEN<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('savings')">SAVINGS<span class="sort-icon">↕</span></th>
+          <th onclick="sortTable('status')">ESTATUS<span class="sort-icon">↕</span></th>
+        </tr>
+      </thead>
+      <tbody id="missionBody"></tbody>
+    </table>
+    <div class="pagination" id="paginationCtrl"></div>
+  </div>
+</div>
+</div>
+
+<!-- ══ PER MONTH ══ -->
+<div id="tab-permonth" class="tab-panel">
+<div class="main">
+  <div class="section-title">MISIONES APROBADAS — SEMANA NATURAL LUN–DOM</div>
+  <div class="month-tabs" id="monthTabsEl"></div>
+  <div id="calendarView"></div>
+  <div class="grid-2" style="margin-top:24px;">
+    <div class="card">
+      <div class="card-title">Misiones Aprobadas por Mes — Acumulado Anual</div>
+      <div class="bar-chart" id="monthlyBars"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Misiones × Servicio × Mes</div>
+      <div class="tbl-wrap">
+        <table class="mission-table" style="font-size:11px;">
+          <thead><tr>
+            <th>MES</th><th>OBC</th><th>NFO</th><th>CHARTER</th><th>HOTSHOT</th><th>D2D</th><th>OTRO</th><th>TOTAL</th>
+          </tr></thead>
+          <tbody id="svcMonthBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ FINANCIERO ══ -->
+<div id="tab-financials" class="tab-panel">
+<div class="main">
+  <div class="section-title">ANÁLISIS FINANCIERO POR CLIENTE</div>
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-title">Revenue vs Costo vs Margen — por Cliente</div>
+    <div class="profit-stack" id="profitStack"></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">P&L por Tipo de Servicio</div>
+      <div class="tbl-wrap">
+        <table class="mission-table">
+          <thead><tr><th>SERVICIO</th><th>REVENUE</th><th>COSTO</th><th>MARGEN $</th><th>MARGEN %</th></tr></thead>
+          <tbody id="plBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Savings Generados al Cliente</div>
+      <div class="bar-chart" id="savingsChart"></div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+        <div class="card-title">MISIONES EN PÉRDIDA</div>
+        <div class="tbl-wrap">
+          <table class="mission-table" style="font-size:11px;">
+            <thead><tr><th>MISIÓN</th><th>CLIENTE</th><th>PÉRDIDA</th><th>MARCA</th></tr></thead>
+            <tbody id="lossBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ CLIENTES ══ -->
+<div id="tab-clients" class="tab-panel">
+<div class="main">
+  <div class="section-title">RANKING DE CLIENTES</div>
+  <div class="grid-2-1">
+    <div class="card">
+      <div class="card-title">Top Clientes — Por Facturación & Misiones</div>
+      <div class="client-list" id="clientList"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Concentración de Revenue</div>
+      <div class="bar-chart" id="clientConcentration"></div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+        <div class="card-title">Índice de Riesgo</div>
+        <div id="riskIndex" style="font-size:12px;line-height:2;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ ALERTAS OPS ══ -->
+<div id="tab-alerts" class="tab-panel">
+<div class="main">
+  <div class="section-title">ALERTAS OPERATIVAS</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Misiones en Alerta / Pendientes</div>
+      <div class="alert-feed" id="alertFeed"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">KPIs de Calidad Operativa</div>
+      <div class="bar-chart" id="qualityKpis"></div>
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+        <div class="card-title">Misiones Recientes — Últimas 24h</div>
+        <div class="tbl-wrap">
+          <table class="mission-table" style="font-size:11px;">
+            <thead><tr><th>MISIÓN</th><th>CLIENTE</th><th>RUTA</th><th>ESTATUS</th><th>MARCA</th></tr></thead>
+            <tbody id="recentMissions"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   CONFIG — URLs de Google Sheets CSV
+═══════════════════════════════════════════════════ */
+const SOURCES = {
+  FLUX: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQiK76HypR41oqyT3nQ9jlpI4ByAwYQ9K4f37Vo75WRsOG9P78iQt6EULxGHzcyKg/pub?output=csv',
+  ASG:  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxo6PsSFVrW5eZ16wEVkLL1dKckf-jQB9GaEsLLF8NIgwnHgDU4mNpK6B_M358zQ/pub?output=csv'
+};
+
+/* ═══════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════ */
+let rawFlux = [], rawASG = [], allData = [], filtered = [];
+let currentBrand = 'ALL';
+let currentPeriod = 'month';
+let sortCol = 'date', sortDir = -1;
+let currentPage = 1; const PAGE_SIZE = 20;
+let activeMonthTab = null;
+let columnMap = {}; // flexible column mapping
+
+/* ═══════════════════════════════════════════════════
+   CLOCK
+═══════════════════════════════════════════════════ */
+function tick() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('es-MX',{hour12:false}) + ' CST';
+}
+tick(); setInterval(tick,1000);
+
+/* ═══════════════════════════════════════════════════
+   CSV PARSER
+═══════════════════════════════════════════════════ */
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if(lines.length < 2) return [];
+  const rawHeaders = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const rows = [];
+  for(let i=1;i<lines.length;i++){
+    const vals = smartSplit(lines[i]);
+    if(vals.every(v=>!v.trim())) continue;
+    const obj = {};
+    rawHeaders.forEach((h,idx) => { obj[h] = (vals[idx]||'').replace(/"/g,'').trim(); });
+    rows.push(obj);
+  }
+  return {headers: rawHeaders, rows};
+}
+
+function smartSplit(line) {
+  const result = []; let current = ''; let inQuotes = false;
+  for(let i=0;i<line.length;i++){
+    const c = line[i];
+    if(c==='"') { inQuotes=!inQuotes; continue; }
+    if(c===',' && !inQuotes) { result.push(current); current=''; continue; }
+    current+=c;
+  }
+  result.push(current);
+  return result;
+}
+
+/* ═══════════════════════════════════════════════════
+   FLEXIBLE COLUMN MAPPING
+   Detecta el nombre de columna sin importar mayúsculas/variaciones
+═══════════════════════════════════════════════════ */
+function buildColumnMap(headers) {
+  const map = {};
+  const patterns = {
+    id:       [/folio|id\s?mision|mission|misi[oó]n|n[uú]m/i],
+    client:   [/cliente|client|company|empresa/i],
+    contact:  [/contacto|contact|responsable/i],
+    service:  [/servicio|service|tipo\s?serv|type/i],
+    origin:   [/origen|origin|from/i],
+    dest:     [/destino|destination|to\b/i],
+    route:    [/ruta|route/i],
+    date:     [/fecha|date/i],
+    revenue:  [/factur|revenue|ingreso|cobrado|venta|precio/i],
+    cost:     [/costo|cost|gasto|egreso|proveedor/i],
+    savings:  [/saving|ahorro/i],
+    status:   [/estatus|status|estado/i],
+  };
+  headers.forEach(h => {
+    Object.entries(patterns).forEach(([key, pats]) => {
+      if(!map[key] && pats.some(p => p.test(h))) map[key] = h;
+    });
+  });
+  return map;
+}
+
+function getVal(row, map, key, fallback='') {
+  if(!map[key]) return fallback;
+  return (row[map[key]] || fallback).toString().trim();
+}
+
+function parseNum(v) {
+  if(!v) return 0;
+  return parseFloat(v.toString().replace(/[^0-9.\-]/g,'')) || 0;
+}
+
+function parseDate(v) {
+  if(!v) return null;
+  // Try multiple formats: DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD
+  let d;
+  d = new Date(v);
+  if(!isNaN(d)) return d;
+  // DD/MM/YYYY
+  const parts = v.split(/[\/\-\.]/);
+  if(parts.length===3) {
+    if(parseInt(parts[0])>12) d = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`);
+    else d = new Date(`${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`);
+    if(!isNaN(d)) return d;
+  }
+  return null;
+}
+
+/* ═══════════════════════════════════════════════════
+   NORMALIZE ROW → unified mission object
+═══════════════════════════════════════════════════ */
+function normalizeRow(row, map, brand) {
+  const dateRaw = getVal(row, map, 'date');
+  const dateObj  = parseDate(dateRaw);
+  const revenue  = parseNum(getVal(row, map, 'revenue'));
+  const cost     = parseNum(getVal(row, map, 'cost'));
+  const savings  = parseNum(getVal(row, map, 'savings'));
+
+  // route: try dedicated route col, else combine origin+dest
+  let route = getVal(row, map, 'route');
+  if(!route) {
+    const orig = getVal(row, map, 'origin');
+    const dest = getVal(row, map, 'dest');
+    route = (orig && dest) ? `${orig} → ${dest}` : (orig || dest || '—');
+  }
+
+  return {
+    id:      getVal(row, map, 'id', `${brand}-${Math.random().toString(36).slice(2,6).toUpperCase()}`),
+    brand,
+    client:  getVal(row, map, 'client', 'Sin cliente'),
+    contact: getVal(row, map, 'contact'),
+    service: getVal(row, map, 'service'),
+    route,
+    dateRaw,
+    date:    dateObj,
+    revenue,
+    cost,
+    margin:  revenue - cost,
+    marginPct: revenue > 0 ? ((revenue-cost)/revenue*100) : 0,
+    savings,
+    status:  getVal(row, map, 'status'),
+    _raw:    row
+  };
+}
+
+/* ═══════════════════════════════════════════════════
+   FETCH — Multi-proxy con fallback para resolver CORS
+   Google Sheets bloquea fetch directo desde file://
+   Intentamos 3 proxies en secuencia hasta que uno funcione
+═══════════════════════════════════════════════════ */
+function buildProxyUrls(csvUrl) {
+  const encoded = encodeURIComponent(csvUrl);
+  return [
+    // Proxy 1: allorigins (más confiable)
+    `https://api.allorigins.win/raw?url=${encoded}`,
+    // Proxy 2: corsproxy.io
+    `https://corsproxy.io/?${encoded}`,
+    // Proxy 3: Direct con no-cors workaround via jsonp-style (último recurso)
+    `https://thingproxy.freeboard.io/fetch/${csvUrl}`,
+  ];
+}
+
+async function fetchWithProxy(csvUrl) {
+  const proxies = buildProxyUrls(csvUrl);
+  let lastError;
+  for (const proxyUrl of proxies) {
+    try {
+      const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const text = await resp.text();
+      // Validar que realmente sea CSV (tiene comas y saltos de línea)
+      if (!text.includes(',') || text.trim().length < 10) throw new Error('Respuesta inválida');
+      return text;
+    } catch(e) {
+      lastError = e;
+      continue; // Intentar siguiente proxy
+    }
+  }
+  throw new Error(`Sin conexión (${lastError?.message || 'todos los proxies fallaron'})`);
+}
+
+async function fetchCSV(url, brand) {
+  const text   = await fetchWithProxy(url);
+  const parsed = parseCSV(text);
+  if(!parsed || !parsed.rows) return [];
+  const map = buildColumnMap(parsed.headers);
+  return parsed.rows.map(r => normalizeRow(r, map, brand));
+}
+
+async function loadAllData() {
+  setLoaderStatus('Conectando con FLUX Logistics...');
+  let errors = [];
+  try {
+    rawFlux = await fetchCSV(SOURCES.FLUX, 'FLUX');
+    setLoaderStatus('FLUX: ' + rawFlux.length + ' registros ✓');
+  } catch(e) { errors.push('FLUX: '+e.message); rawFlux = []; }
+
+  setLoaderStatus('Conectando con ASG Logistics...');
+  try {
+    rawASG = await fetchCSV(SOURCES.ASG, 'ASG');
+    setLoaderStatus('ASG: ' + rawASG.length + ' registros ✓');
+  } catch(e) { errors.push('ASG: '+e.message); rawASG = []; }
+
+  allData = [...rawFlux, ...rawASG].filter(r => r.client !== 'Sin cliente' || r.id);
+
+  const banner = document.getElementById('errorBanner');
+  if(errors.length) {
+    banner.style.display = 'block';
+    banner.innerHTML = '⚠ <strong>Error de conexión:</strong> ' + errors.join(' | ')
+      + ' — Verifica publicación CSV o presiona ↻ ACTUALIZAR en 30 seg.';
+  } else {
+    banner.style.display = 'none';
+  }
+
+  // Populate dynamic filters
+  populateFilters();
+  applyFilters();
+
+  document.getElementById('lastUpdate').textContent =
+    'Act: ' + new Date().toLocaleTimeString('es-MX',{hour12:false});
+
+  setLoaderStatus('Listo ✓');
+  setTimeout(() => { document.getElementById('loader').style.display='none'; }, 600);
+}
+
+function setLoaderStatus(msg) {
+  const el = document.getElementById('loaderStatus');
+  if(el) el.textContent = msg;
+}
+
+/* ═══════════════════════════════════════════════════
+   FILTERS
+═══════════════════════════════════════════════════ */
+function populateFilters() {
+  const clients  = [...new Set(allData.map(r=>r.client).filter(Boolean))].sort();
+  const contacts = [...new Set(allData.map(r=>r.contact).filter(Boolean))].sort();
+  fillSelect('fClient',  clients);
+  fillSelect('fContact', contacts);
+}
+
+function fillSelect(id, options) {
+  const el = document.getElementById(id);
+  const current = el.value;
+  const first = el.options[0];
+  el.innerHTML = '';
+  el.appendChild(first);
+  options.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = opt.textContent = o;
+    el.appendChild(opt);
+  });
+  el.value = current;
+}
+
+const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function applyFilters() {
+  const now = new Date();
+  const fYear    = document.getElementById('fYear').value;
+  const fMonth   = document.getElementById('fMonth').value;
+  const fClient  = document.getElementById('fClient').value;
+  const fService = document.getElementById('fService').value;
+  const fContact = document.getElementById('fContact').value;
+  const fStatus  = document.getElementById('fStatus').value;
+  const fSearch  = document.getElementById('fSearch').value.toLowerCase();
+
+  filtered = allData.filter(r => {
+    // Brand
+    if(currentBrand !== 'ALL' && r.brand !== currentBrand) return false;
+
+    // Period
+    if(r.date) {
+      if(currentPeriod==='month') {
+        if(r.date.getMonth()!==now.getMonth()||r.date.getFullYear()!==now.getFullYear()) return false;
+      } else if(currentPeriod==='q') {
+        const q = Math.floor(now.getMonth()/3);
+        if(Math.floor(r.date.getMonth()/3)!==q||r.date.getFullYear()!==now.getFullYear()) return false;
+      } else if(currentPeriod==='ytd') {
+        if(r.date.getFullYear()!==now.getFullYear()) return false;
+      }
+    }
+
+    if(fYear    && r.date && r.date.getFullYear().toString()!==fYear) return false;
+    if(fMonth   && r.date && (r.date.getMonth()+1).toString()!==fMonth) return false;
+    if(fClient  && r.client!==fClient) return false;
+    if(fService && !r.service.toLowerCase().includes(fService.toLowerCase())) return false;
+    if(fContact && r.contact!==fContact) return false;
+    if(fStatus  && !r.status.toLowerCase().includes(fStatus.toLowerCase())) return false;
+    if(fSearch  && !JSON.stringify(r).toLowerCase().includes(fSearch)) return false;
+    return true;
+  });
+
+  renderAll();
+}
+
+/* ═══════════════════════════════════════════════════
+   RENDER ALL
+═══════════════════════════════════════════════════ */
+function renderAll() {
+  renderKPIs();
+  renderSvcBars();
+  renderStatusBar();
+  renderBrandCompare();
+  renderMonthEvolution();
+  renderMissionTable();
+  renderPerMonth();
+  renderFinancials();
+  renderClients();
+  renderAlerts();
+}
+
+/* ── KPIs ── */
+function renderKPIs() {
+  const total    = filtered.length;
+  const revenue  = sum(filtered,'revenue');
+  const cost     = sum(filtered,'cost');
+  const profit   = revenue - cost;
+  const savings  = sum(filtered,'savings');
+  const losses   = filtered.filter(r=>r.margin<0);
+  const lossAmt  = losses.reduce((a,b)=>a+b.margin,0);
+  const delivered= filtered.filter(r=>statusIs(r.status,['entregado','delivered','completado'])).length;
+  const otd      = total>0 ? (delivered/total*100).toFixed(1) : '—';
+  const marginPct= revenue>0 ? (profit/revenue*100).toFixed(1) : '0';
+
+  document.getElementById('kSavings').textContent    = fmt(savings);
+  document.getElementById('kProfit').textContent     = fmt(profit);
+  document.getElementById('kMarginPct').textContent  = `Margen: ${marginPct}%`;
+  document.getElementById('kLoss').textContent       = fmt(Math.abs(lossAmt));
+  document.getElementById('kLossMissions').textContent = losses.length;
+
+  document.getElementById('kpiGrid').innerHTML = `
+    ${kpi('amber','Total Misiones',total,'Aprobadas en el período')}
+    ${kpi('green','Facturación',fmt(revenue),'USD')}
+    ${kpi('green','Ganancia Neta',fmt(profit),'Margen: '+marginPct+'%')}
+    ${kpi('red','Pérdidas',fmt(Math.abs(lossAmt)),losses.length+' misiones')}
+    ${kpi('purple','Savings Cliente',fmt(savings),'vs. mercado spot')}
+    ${kpi('blue','On-Time Delivery',otd+'%',delivered+' / '+total+' entregas')}
+    ${kpi('amber','FLUX Misiones',filtered.filter(r=>r.brand==='FLUX').length,'marca FLUX')}
+    ${kpi('blue','ASG Misiones',filtered.filter(r=>r.brand==='ASG').length,'marca ASG')}
+  `;
+}
+
+function kpi(cls,label,val,sub) {
+  return `<div class="kpi ${cls}">
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-value">${val}</div>
+    <div class="kpi-sub">${sub}</div>
+  </div>`;
+}
+
+/* ── SERVICE BARS ── */
+function renderSvcBars() {
+  const svcGroups = groupBy(filtered, r => classifyService(r.service));
+  const entries   = Object.entries(svcGroups).sort((a,b)=>b[1].length-a[1].length);
+  const maxM      = Math.max(...entries.map(e=>e[1].length),1);
+  const maxR      = Math.max(...entries.map(e=>sum(e[1],'revenue')),1);
+  const colors    = {'OBC':'#a855f7','NFO':'#f59e0b','Charter':'#3b82f6','Hotshot':'#22c55e','D2D':'#ec4899','Otro':'#64748b'};
+
+  document.getElementById('svcBar').innerHTML = entries.map(([svc,rows]) =>
+    barRow(svc, rows.length, maxM, rows.length+' mis.', colors[svc]||'#64748b')
+  ).join('') || '<div class="empty-state">Sin datos</div>';
+
+  document.getElementById('revBar').innerHTML = entries.map(([svc,rows]) => {
+    const r = sum(rows,'revenue');
+    return barRow(svc, r, maxR, fmt(r), colors[svc]||'#64748b');
+  }).join('') || '<div class="empty-state">Sin datos</div>';
+}
+
+/* ── STATUS BAR ── */
+function renderStatusBar() {
+  const groups = groupBy(filtered, r => normalizeStatus(r.status));
+  const entries = Object.entries(groups).sort((a,b)=>b[1].length-a[1].length);
+  const maxV = Math.max(...entries.map(e=>e[1].length),1);
+  const colors = {'Entregado':'#22c55e','En Tránsito':'#3b82f6','Pendiente':'#f59e0b','Alerta':'#ef4444','Cancelado':'#64748b','Sin Estatus':'#1e2330'};
+  document.getElementById('statusBar').innerHTML = entries.map(([s,rows]) =>
+    barRow(s, rows.length, maxV, rows.length, colors[s]||'#64748b')
+  ).join('') || '<div class="empty-state">Sin datos</div>';
+}
+
+/* ── BRAND COMPARE ── */
+function renderBrandCompare() {
+  const brands = ['FLUX','ASG'];
+  const maxR   = Math.max(...brands.map(b=>sum(filtered.filter(r=>r.brand===b),'revenue')),1);
+  const html   = brands.map(b => {
+    const rows = filtered.filter(r=>r.brand===b);
+    const rev  = sum(rows,'revenue');
+    const mis  = rows.length;
+    const color = b==='FLUX' ? 'var(--flux)' : 'var(--asg)';
+    return `<div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${color};">${b}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">${mis} mis. · ${fmt(rev)}</span>
+      </div>
+      <div class="bar-track" style="height:12px;">
+        <div class="bar-fill" style="width:${(rev/maxR*100).toFixed(0)}%;background:${color};"></div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('brandCompare').innerHTML = html || '<div class="empty-state">Sin datos</div>';
+}
+
+/* ── MONTH EVOLUTION ── */
+function renderMonthEvolution() {
+  const year = new Date().getFullYear();
+  const byMonth = Array.from({length:12},(_,i)=>({
+    m:i, label:MONTHS_ES[i].slice(0,3).toUpperCase(),
+    total: allData.filter(r=>r.date&&r.date.getFullYear()===year&&r.date.getMonth()===i&&(currentBrand==='ALL'||r.brand===currentBrand)).length
+  }));
+  const maxV = Math.max(...byMonth.map(b=>b.total),1);
+  document.getElementById('monthEvolution').innerHTML = byMonth.map(b =>
+    barRow(b.label, b.total, maxV, b.total||'—', b.total>0?'var(--flux)':'var(--border)')
+  ).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   MISSION TABLE
+═══════════════════════════════════════════════════ */
+function renderMissionTable() {
+  const sorted = [...filtered].sort((a,b) => {
+    let av=a[sortCol], bv=b[sortCol];
+    if(sortCol==='date'){ av=a.date?.getTime()||0; bv=b.date?.getTime()||0; }
+    if(typeof av==='string') av=av.toLowerCase();
+    if(typeof bv==='string') bv=bv.toLowerCase();
+    return av>bv ? sortDir : av<bv ? -sortDir : 0;
+  });
+
+  const total = sorted.length;
+  const pages = Math.ceil(total/PAGE_SIZE);
+  if(currentPage>pages) currentPage=1;
+  const slice = sorted.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
+
+  document.getElementById('missionCount').textContent = `${total} registro${total!==1?'s':''}`;
+
+  const tbody = document.getElementById('missionBody');
+  if(!slice.length){ tbody.innerHTML='<tr><td colspan="12"><div class="empty-state">Sin misiones para los filtros seleccionados</div></td></tr>'; }
+  else {
+    tbody.innerHTML = slice.map(m => {
+      const mc = m.margin>=0?'var(--green)':'var(--red)';
+      return `<tr>
+        <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${m.id}</td>
+        <td style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:${m.brand==='FLUX'?'var(--flux)':'var(--asg)'};">${m.brand}</td>
+        <td style="font-weight:500;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.client}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${m.contact||'—'}</td>
+        <td><span class="svc svc-${svcClass(m.service)}">${m.service||'—'}</span></td>
+        <td style="font-family:'DM Mono',monospace;font-size:10px;">${m.route}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${m.dateRaw||'—'}</td>
+        <td style="font-family:'DM Mono',monospace;color:var(--green);">${fmt(m.revenue)}</td>
+        <td style="font-family:'DM Mono',monospace;color:var(--muted);">${fmt(m.cost)}</td>
+        <td style="font-family:'DM Mono',monospace;color:${mc};">${fmt(m.margin)} <span style="font-size:9px;">(${m.marginPct.toFixed(1)}%)</span></td>
+        <td style="font-family:'DM Mono',monospace;color:var(--purple);">${m.savings>0?fmt(m.savings):'—'}</td>
+        <td><span class="badge ${statusClass(m.status)}">${m.status||'—'}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Pagination
+  const pg = document.getElementById('paginationCtrl');
+  if(pages<=1){pg.innerHTML='';return;}
+  let btns = `<span class="page-info">Pág ${currentPage}/${pages}</span>`;
+  if(currentPage>1) btns += `<button class="page-btn" onclick="goPage(${currentPage-1})">←</button>`;
+  const start = Math.max(1,currentPage-2), end=Math.min(pages,currentPage+2);
+  for(let i=start;i<=end;i++) btns+=`<button class="page-btn${i===currentPage?' active':''}" onclick="goPage(${i})">${i}</button>`;
+  if(currentPage<pages) btns+=`<button class="page-btn" onclick="goPage(${currentPage+1})">→</button>`;
+  pg.innerHTML = btns;
+}
+
+function goPage(n){ currentPage=n; renderMissionTable(); }
+function sortTable(col){ if(sortCol===col) sortDir*=-1; else{sortCol=col;sortDir=-1;} renderMissionTable(); }
+
+/* ═══════════════════════════════════════════════════
+   PER MONTH
+═══════════════════════════════════════════════════ */
+function renderPerMonth() {
+  const year = new Date().getFullYear();
+  const src  = currentBrand==='ALL' ? allData : allData.filter(r=>r.brand===currentBrand);
+  const withDates = src.filter(r=>r.date&&r.date.getFullYear()===year);
+
+  // Get active months
+  const monthsWithData = [...new Set(withDates.map(r=>r.date.getMonth()))].sort((a,b)=>a-b);
+  if(!monthsWithData.length){ document.getElementById('calendarView').innerHTML='<div class="empty-state">Sin datos con fecha en '+year+'</div>'; return; }
+
+  if(activeMonthTab===null || !monthsWithData.includes(activeMonthTab)) activeMonthTab=monthsWithData[monthsWithData.length-1];
+
+  // Month tab buttons
+  document.getElementById('monthTabsEl').innerHTML = monthsWithData.map(m =>
+    `<button class="month-tab${m===activeMonthTab?' active':''}" onclick="setMonthTab(${m})">${MONTHS_ES[m].toUpperCase()} (${withDates.filter(r=>r.date.getMonth()===m).length})</button>`
+  ).join('');
+
+  // Calendar
+  buildCalendar(withDates, activeMonthTab, year);
+
+  // Monthly bars
+  const maxV = Math.max(...monthsWithData.map(m=>withDates.filter(r=>r.date.getMonth()===m).length),1);
+  document.getElementById('monthlyBars').innerHTML = monthsWithData.map(m => {
+    const cnt = withDates.filter(r=>r.date.getMonth()===m).length;
+    return barRow(MONTHS_ES[m].slice(0,3).toUpperCase(), cnt, maxV, cnt+' mis.', 'var(--flux)');
+  }).join('');
+
+  // Svc × Month table
+  const SVC_LIST = ['OBC','NFO','Charter','Hotshot','D2D','Otro'];
+  document.getElementById('svcMonthBody').innerHTML = monthsWithData.map(m => {
+    const rows = withDates.filter(r=>r.date.getMonth()===m);
+    const bySvc = svcCountsForRows(rows);
+    return `<tr>
+      <td>${MONTHS_ES[m].slice(0,3)}</td>
+      ${SVC_LIST.map(s=>`<td>${bySvc[s]||0}</td>`).join('')}
+      <td style="color:var(--flux);font-weight:600;">${rows.length}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setMonthTab(m){ activeMonthTab=m; renderPerMonth(); }
+
+function buildCalendar(data, month, year) {
+  const rows = data.filter(r=>r.date.getMonth()===month);
+  const DAYS = ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'];
+
+  // Build week buckets (Mon-Sun)
+  const firstDay = new Date(year, month, 1);
+  const lastDay  = new Date(year, month+1, 0);
+  const firstMon = new Date(firstDay);
+  const dow = (firstDay.getDay()+6)%7; // 0=Mon
+  firstMon.setDate(firstMon.getDate()-dow);
+
+  const weeks = [];
+  let d = new Date(firstMon);
+  while(d <= lastDay) {
+    const week = [];
+    for(let i=0;i<7;i++){
+      const day = new Date(d);
+      const cnt = rows.filter(r => r.date && r.date.toDateString()===day.toDateString()).length;
+      week.push({ date:new Date(day), cnt, inMonth: day.getMonth()===month });
+      d.setDate(d.getDate()+1);
+    }
+    weeks.push(week);
+  }
+
+  const total = rows.length;
+  let html = `<div class="card"><div class="card-title">${MONTHS_ES[month].toUpperCase()} ${year} — Misiones por Semana Natural (Lun–Dom)</div>`;
+  html += `<div class="day-headers">${DAYS.map(d=>`<div class="day-h">${d}</div>`).join('')}</div>`;
+  html += `<div class="week-grid">`;
+  weeks.forEach((week,wi)=>{
+    const weekTotal = week.filter(d=>d.inMonth).reduce((a,b)=>a+b.cnt,0);
+    html+=`<div class="week-row"><div class="week-label">SEM ${wi+1}</div><div class="day-cells">`;
+    week.forEach(day=>{
+      const cls = !day.inMonth ? 'empty' : day.cnt>=5 ? 'hot' : '';
+      const numColor = !day.inMonth ? 'color:var(--border)' : '';
+      html+=`<div class="day-cell ${cls}">
+        <div class="day-name">${DAYS[(day.date.getDay()+6)%7]}</div>
+        <div class="day-num" style="${numColor}">${day.inMonth ? (day.cnt||'0') : '·'}</div>
+      </div>`;
+    });
+    html+=`</div><div class="day-cells-total">${weekTotal||''}</div></div>`;
+  });
+  html+=`</div><div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">
+    Total mes: <span style="color:var(--flux);font-size:16px;font-family:'Bebas Neue',sans-serif;">${total}</span> misiones aprobadas
+  </div></div>`;
+  document.getElementById('calendarView').innerHTML = html;
+}
+
+function svcCountsForRows(rows) {
+  const counts = {OBC:0,NFO:0,Charter:0,Hotshot:0,'D2D':0,Otro:0};
+  rows.forEach(r=>{ const s=classifyService(r.service); counts[s]=(counts[s]||0)+1; });
+  return counts;
+}
+
+/* ═══════════════════════════════════════════════════
+   FINANCIALS
+═══════════════════════════════════════════════════ */
+function renderFinancials() {
+  // P&L by service
+  const svcGroups = groupBy(filtered, r=>classifyService(r.service));
+  const plEntries = Object.entries(svcGroups).map(([s,rows])=>({
+    s, rev:sum(rows,'revenue'), cost:sum(rows,'cost')
+  })).sort((a,b)=>b.rev-a.rev);
+
+  document.getElementById('plBody').innerHTML = plEntries.map(e=>{
+    const m=e.rev-e.cost, mp=e.rev>0?(m/e.rev*100).toFixed(1):0;
+    return `<tr>
+      <td>${e.s}</td>
+      <td style="color:var(--green);font-family:'DM Mono',monospace;">${fmt(e.rev)}</td>
+      <td style="color:var(--muted);font-family:'DM Mono',monospace;">${fmt(e.cost)}</td>
+      <td style="color:${m>=0?'var(--green)':'var(--red)'};font-family:'DM Mono',monospace;">${fmt(m)}</td>
+      <td style="color:var(--flux);font-family:'DM Mono',monospace;">${mp}%</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5"><div class="empty-state">Sin datos</div></td></tr>';
+
+  // Profit by client
+  const clientGroups = groupBy(filtered, r=>r.client);
+  const clientEntries = Object.entries(clientGroups).map(([c,rows])=>({
+    c, rev:sum(rows,'revenue'), cost:sum(rows,'cost'), missions:rows.length
+  })).sort((a,b)=>b.rev-a.rev).slice(0,10);
+  const maxR = Math.max(...clientEntries.map(e=>e.rev),1);
+
+  document.getElementById('profitStack').innerHTML = clientEntries.map(e=>{
+    const m=e.rev-e.cost, mp=e.rev>0?(m/e.rev*100).toFixed(1):0;
+    return `<div class="profit-row">
+      <div class="profit-label">${e.c}</div>
+      <div class="profit-bar-wrap">
+        <div class="profit-track">
+          <div class="profit-revenue" style="width:${(e.rev/maxR*100).toFixed(0)}%;"></div>
+          <div class="profit-cost" style="width:${(e.cost/maxR*100).toFixed(0)}%;"></div>
+        </div>
+        <div class="profit-nums">
+          <span class="rev">Rev: ${fmt(e.rev)}</span>
+          <span class="cost">Costo: ${fmt(e.cost)}</span>
+          <span class="margin">Margen: ${fmt(m)} (${mp}%)</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty-state">Sin datos</div>';
+
+  // Savings chart
+  const savGroups = Object.entries(clientGroups).map(([c,rows])=>({c,s:sum(rows,'savings')})).filter(e=>e.s>0).sort((a,b)=>b.s-a.s).slice(0,8);
+  const maxS = Math.max(...savGroups.map(e=>e.s),1);
+  document.getElementById('savingsChart').innerHTML = savGroups.map(e=>
+    barRow(e.c, e.s, maxS, fmt(e.s), 'var(--purple)')
+  ).join('') || '<div class="empty-state">Sin savings registrados</div>';
+
+  // Loss missions
+  const losses = filtered.filter(r=>r.margin<0).sort((a,b)=>a.margin-b.margin);
+  document.getElementById('lossBody').innerHTML = losses.map(r=>
+    `<tr>
+      <td style="color:var(--red);font-family:'DM Mono',monospace;font-size:10px;">${r.id}</td>
+      <td style="font-size:11px;">${r.client}</td>
+      <td style="color:var(--red);font-family:'DM Mono',monospace;">${fmt(r.margin)}</td>
+      <td style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:${r.brand==='FLUX'?'var(--flux)':'var(--asg)'};">${r.brand}</td>
+    </tr>`
+  ).join('') || '<tr><td colspan="4" style="color:var(--green);text-align:center;padding:12px;font-family:\'DM Mono\',monospace;font-size:11px;">✓ Sin misiones en pérdida</td></tr>';
+}
+
+/* ═══════════════════════════════════════════════════
+   CLIENTS
+═══════════════════════════════════════════════════ */
+function renderClients() {
+  const clientGroups = groupBy(filtered, r=>r.client);
+  const clients = Object.entries(clientGroups).map(([c,rows])=>({
+    c, rev:sum(rows,'revenue'), missions:rows.length,
+    contact: rows.find(r=>r.contact)?.contact||'—',
+    brand: [...new Set(rows.map(r=>r.brand))].join('+')
+  })).sort((a,b)=>b.rev-a.rev);
+
+  document.getElementById('clientList').innerHTML = clients.slice(0,10).map((c,i)=>
+    `<div class="client-row">
+      <div class="client-rank">${i+1}</div>
+      <div style="flex:1;">
+        <div class="client-name">${c.c}</div>
+        <div class="client-contact">${c.contact} · <span style="color:${c.brand==='FLUX'?'var(--flux)':c.brand==='ASG'?'var(--asg)':'var(--text)'};">${c.brand}</span></div>
+      </div>
+      <div style="text-align:right;">
+        <div class="client-missions">${c.missions}<span style="font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;"> mis.</span></div>
+        <div class="client-revenue">${fmt(c.rev)}</div>
+      </div>
+    </div>`
+  ).join('') || '<div class="empty-state">Sin datos</div>';
+
+  const totalRev = sum(clients,'rev');
+  const maxRev   = Math.max(...clients.map(c=>c.rev),1);
+  document.getElementById('clientConcentration').innerHTML = clients.slice(0,8).map(c=>
+    barRow(c.c.split(' ')[0], c.rev, maxRev, (totalRev>0?(c.rev/totalRev*100).toFixed(0):0)+'%', 'var(--asg)')
+  ).join('');
+
+  // Risk index
+  const top1pct = totalRev>0 ? (clients[0]?.rev||0)/totalRev*100 : 0;
+  const top3pct = totalRev>0 ? clients.slice(0,3).reduce((a,b)=>a+b.rev,0)/totalRev*100 : 0;
+  const risk    = top1pct>40 ? '🔴 ALTO' : top1pct>25 ? '🟡 MEDIO' : '🟢 BAJO';
+  document.getElementById('riskIndex').innerHTML = `
+    Top 1 cliente: <span style="color:var(--flux);font-weight:600;">${top1pct.toFixed(0)}%</span> del revenue<br>
+    Top 3 clientes: <span style="color:var(--flux);font-weight:600;">${top3pct.toFixed(0)}%</span> del revenue<br>
+    Riesgo de concentración: <span style="font-weight:600;">${risk}</span>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════
+   ALERTS
+═══════════════════════════════════════════════════ */
+function renderAlerts() {
+  const alerts = filtered.filter(r => statusIs(r.status,['alerta','alert','pendiente','pending','en transito','en tránsito','transit']));
+
+  document.getElementById('alertFeed').innerHTML = alerts.slice(0,15).map(r=>{
+    const s = normalizeStatus(r.status);
+    const cls = s==='Alerta'?'critical': s==='Pendiente'?'warning':'ok';
+    const icon = s==='Alerta'?'🔴': s==='Pendiente'?'🟡':'🔵';
+    return `<div class="alert-item ${cls}">
+      <div style="font-size:14px;flex-shrink:0;">${icon}</div>
+      <div>
+        <div class="alert-text">${r.id} — ${r.client} · ${r.route} · <strong>${s}</strong></div>
+        <div class="alert-time">${r.dateRaw||'—'} · ${r.service||'—'} · ${r.brand}</div>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty-state">✓ Sin alertas activas en el período</div>';
+
+  // Quality KPIs
+  const total     = filtered.length;
+  const delivered = filtered.filter(r=>statusIs(r.status,['entregado','delivered','completado'])).length;
+  const noIncident= filtered.filter(r=>!statusIs(r.status,['alerta','alert'])).length;
+  const otd       = total>0 ? delivered/total*100 : 0;
+  const niPct     = total>0 ? noIncident/total*100 : 0;
+  const data = [
+    {label:'On-Time Delivery', val:otd, color:'var(--green)'},
+    {label:'Sin Incidencias',  val:niPct, color:'var(--green)'},
+    {label:'FLUX OTD', val:calcOTD('FLUX'), color:'var(--flux)'},
+    {label:'ASG OTD',  val:calcOTD('ASG'),  color:'var(--asg)'},
+  ];
+  document.getElementById('qualityKpis').innerHTML = data.map(d=>
+    barRow(d.label, d.val, 100, d.val.toFixed(1)+'%', d.color)
+  ).join('');
+
+  // Recent missions
+  const recent = [...filtered].sort((a,b)=>(b.date?.getTime()||0)-(a.date?.getTime()||0)).slice(0,10);
+  document.getElementById('recentMissions').innerHTML = recent.map(r=>
+    `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${r.id}</td>
+      <td style="font-size:11px;">${r.client}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:10px;">${r.route}</td>
+      <td><span class="badge ${statusClass(r.status)}">${r.status||'—'}</span></td>
+      <td style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:${r.brand==='FLUX'?'var(--flux)':'var(--asg)'};">${r.brand}</td>
+    </tr>`
+  ).join('') || '<tr><td colspan="5"><div class="empty-state">Sin datos</div></td></tr>';
+}
+
+function calcOTD(brand) {
+  const b = filtered.filter(r=>r.brand===brand);
+  if(!b.length) return 0;
+  return b.filter(r=>statusIs(r.status,['entregado','delivered','completado'])).length/b.length*100;
+}
+
+/* ═══════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════ */
+function sum(arr, key) { return arr.reduce((a,b)=>a+(parseFloat(b[key])||0),0); }
+function groupBy(arr, fn) {
+  const m={};
+  arr.forEach(r=>{ const k=fn(r); if(!m[k])m[k]=[]; m[k].push(r); });
+  return m;
+}
+function fmt(n) {
+  if(!n && n!==0) return '—';
+  const abs = Math.abs(n);
+  const sign = n<0?'-':'';
+  if(abs>=1000000) return sign+'$'+(abs/1000000).toFixed(1)+'M';
+  if(abs>=1000)    return sign+'$'+(abs/1000).toFixed(1)+'K';
+  return sign+'$'+abs.toFixed(0);
+}
+function barRow(label, val, max, display, color) {
+  const pct = max>0 ? Math.max((val/max*100),1).toFixed(0) : 0;
+  return `<div class="bar-row">
+    <div class="bar-label" title="${label}">${label}</div>
+    <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};"></div></div>
+    <div class="bar-val">${display}</div>
+  </div>`;
+}
+
+function classifyService(s) {
+  if(!s) return 'Otro';
+  const l = s.toLowerCase();
+  if(l.includes('obc')||l.includes('handcarry')||l.includes('courier')) return 'OBC';
+  if(l.includes('nfo')||l.includes('next flight')) return 'NFO';
+  if(l.includes('charter')) return 'Charter';
+  if(l.includes('hotshot')) return 'Hotshot';
+  if(l.includes('door')||l.includes('dtd')||l.includes('puerta')) return 'D2D';
+  return 'Otro';
+}
+
+function svcClass(s) {
+  if(!s) return 'otro';
+  const l=s.toLowerCase();
+  if(l.includes('obc')||l.includes('handcarry')) return 'obc';
+  if(l.includes('nfo')||l.includes('next')) return 'nfo';
+  if(l.includes('charter')) return 'charter';
+  if(l.includes('hotshot')) return 'hotshot';
+  if(l.includes('door')||l.includes('dtd')) return 'dtd';
+  return 'otro';
+}
+
+function normalizeStatus(s) {
+  if(!s) return 'Sin Estatus';
+  const l=s.toLowerCase().trim();
+  if(l.includes('entreg')||l.includes('complet')||l.includes('delivered')) return 'Entregado';
+  if(l.includes('transit')||l.includes('tránsito')||l.includes('transito')) return 'En Tránsito';
+  if(l.includes('alerta')||l.includes('alert')) return 'Alerta';
+  if(l.includes('pendien')||l.includes('pending')) return 'Pendiente';
+  if(l.includes('cancel')) return 'Cancelado';
+  return s;
+}
+
+function statusIs(s, list) {
+  if(!s) return false;
+  const l=s.toLowerCase().trim();
+  return list.some(x=>l.includes(x.toLowerCase()));
+}
+
+function statusClass(s) {
+  if(!s) return '';
+  return normalizeStatus(s).toLowerCase().replace(' ','');
+}
+
+/* ── UI Controls ── */
+function showTab(id, el) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if(el) el.classList.add('active');
+}
+
+function setBrand(brand, el) {
+  currentBrand=brand;
+  document.querySelectorAll('.brand-pill').forEach(p=>p.classList.remove('active'));
+  if(el) el.classList.add('active');
+  applyFilters();
+}
+
+function setPeriod(period, btn) {
+  currentPeriod=period;
+  document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  // Auto-set month filter if period=month
+  if(period==='month'){
+    document.getElementById('fMonth').value=new Date().getMonth()+1;
+    document.getElementById('fYear').value=new Date().getFullYear();
+  } else if(period==='all'||period==='ytd'){
+    document.getElementById('fMonth').value='';
+    document.getElementById('fYear').value='';
+  }
+  applyFilters();
+}
+
+/* ── Auto-refresh cada 5 min ── */
+setInterval(loadAllData, 5*60*1000);
+
+/* ── INIT ── */
+loadAllData();
+</script>
+</body>
+</html>
